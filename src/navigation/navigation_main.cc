@@ -29,6 +29,7 @@
 
 #include "amrl_msgs/Localization2DMsg.h"
 #include "amrl_msgs/Pose2Df.h"
+#include "amrl_msgs/NavigationConfigMsg.h"
 #include "glog/logging.h"
 #include "gflags/gflags.h"
 #include "eigen3/Eigen/Dense"
@@ -62,9 +63,9 @@ using std::string;
 using std::vector;
 using Eigen::Vector2f;
 
-DEFINE_string(laser_topic, "velodyne_2dscan", "Name of ROS topic for LIDAR data");
-DEFINE_string(odom_topic, "jackal_velocity_controller/odom", "Name of ROS topic for odometry data");
-DEFINE_string(loc_topic, "localization", "Name of ROS topic for localization");
+DEFINE_string(laser_topic, "/scan", "Name of ROS topic for LIDAR data");
+DEFINE_string(odom_topic, "/odom", "Name of ROS topic for odometry data");
+DEFINE_string(loc_topic, "/localization", "Name of ROS topic for localization");
 DEFINE_string(init_topic,
               "initialpose",
               "Name of ROS topic for initialization");
@@ -72,7 +73,7 @@ DEFINE_string(init_topic,
 DEFINE_string(enable_topic, "autonomy_arbiter/enabled",
     "ROS topic that indicates whether autonomy is enabled or not.");
 DEFINE_string(map,
-              "maps/Joydeepb-Home/Joydeepb-Home.navigation.txt",
+              "/home/jaholtz/code/amrl_maps/GDC1/GDC1.navigation.txt",
               "Name of navigation map file");
 DECLARE_string(helpon);
 DECLARE_int32(v);
@@ -131,6 +132,30 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
     printf("Odometry t=%f\n", msg.header.stamp.toSec());
   }
   navigation_->UpdateOdometry(msg);
+}
+
+void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
+  if (!isnan(msg.max_vel)) {
+    navigation_->SetMaxVel(msg.max_vel);
+  }
+  if (!isnan(msg.max_accel)) {
+    navigation_->SetMaxAccel(msg.max_accel);
+  }
+  if (!isnan(msg.max_decel)) {
+    navigation_->SetMaxDecel(msg.max_decel);
+  }
+  if (!isnan(msg.ang_accel)) {
+    navigation_->SetAngAccel(msg.ang_accel);
+  }
+  if (!isnan(msg.ang_vel)) {
+    navigation_->SetAngVel(msg.ang_vel);
+  }
+  if (!isnan(msg.margin)) {
+    navigation_->SetObstacleMargin(msg.margin);
+  }
+  if (!isnan(msg.carrot_dist)) {
+    navigation_->SetCarrotDist(msg.carrot_dist);
+  }
 }
 
 void GoToCallbackPS(const geometry_msgs::PoseStamped& msg) {
@@ -196,6 +221,8 @@ int main(int argc, char** argv) {
       n.subscribe(FLAGS_enable_topic, 1, &EnablerCallback);
   ros::Subscriber halt_sub =
       n.subscribe("halt_robot", 1, &HaltCallback);
+  ros::Subscriber config_sub =
+      n.subscribe("nav_config", 1, &ConfigCallback);
 
   RateLoop loop(1.0 / FLAGS_dt);
   while (run_ && ros::ok()) {

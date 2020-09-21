@@ -77,11 +77,11 @@ using namespace ros_helpers;
 // Control loop period, in seconds.
 DEFINE_double(dt, 0.025, "Control loop period");
 // Maximum speed that the robot will drive at.
-DEFINE_double(max_speed, 0.5, "Maximum speed");
+DEFINE_double(max_speed, 1.5, "Maximum speed");
 // Maximum acceleration of the robot.
-DEFINE_double(max_accel, 1.0, "Maximum acceleration");
+DEFINE_double(max_accel, 5.0, "Maximum acceleration");
 // Maximum deceleration of the robot.
-DEFINE_double(max_decel, 1.0, "Maximum deceleration");
+DEFINE_double(max_decel, 5.0, "Maximum deceleration");
 
 DEFINE_double(max_ang_accel, 0.5, "Maximum angular acceleration");
 DEFINE_double(max_ang_speed, 1.0, "Maximum angular speed");
@@ -94,7 +94,7 @@ DEFINE_double(carrot_dist, 2.5, "Distance of carrot from current location");
 DEFINE_double(system_latency, 0.24, "System latency in seconds");
 
 // Margin to leave around the car for obstacle checking.
-DEFINE_double(obstacle_margin, 0.15, "Margin to leave for obstacle avoidance");
+DEFINE_double(obstacle_margin, 0.10, "Margin to leave for obstacle avoidance");
 
 // Special test modes.
 DEFINE_bool(test_toc, false, "Run 1D time-optimal controller test");
@@ -111,7 +111,7 @@ DEFINE_int32(num_options, 41, "Number of options to consider");
 DEFINE_string(twist_drive_topic, "navigation/cmd_vel", "ROS topic to publish twist messages to.");
 
 // Option to disregard joystick safety for running in simulation.
-DEFINE_bool(no_joystick, false, "Disregards autonomy enable mode from joystick");
+DEFINE_bool(no_joystick, true, "Disregards autonomy enable mode from joystick");
 
 namespace {
 ros::Publisher ackermann_drive_pub_;
@@ -1107,6 +1107,34 @@ void Navigation::Abort() {
     printf("Abort!\n");
   }
   nav_complete_ = true;
+}
+
+void Navigation::SetMaxVel(const float vel) {
+  FLAGS_max_speed = vel;
+}
+
+void Navigation::SetMaxAccel(const float accel) {
+  FLAGS_max_accel = accel;
+}
+
+void Navigation::SetMaxDecel(const float decel) {
+  FLAGS_max_decel = decel;
+}
+
+void Navigation::SetAngAccel(const float accel) {
+  FLAGS_max_ang_accel = accel;
+}
+
+void Navigation::SetAngVel(const float vel) {
+  FLAGS_max_ang_speed = vel;
+}
+
+void Navigation::SetObstacleMargin(const float margin) {
+  FLAGS_obstacle_margin = margin;
+}
+
+void Navigation::SetCarrotDist(const float carrot_dist) {
+  FLAGS_carrot_dist = carrot_dist;
 }
 
 void Navigation::Run() {

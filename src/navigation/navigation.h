@@ -78,6 +78,15 @@ class Navigation {
   // Stop all navigation functions.
   void Abort();
 
+  // Allow client programs to configure navigation parameters
+  void SetMaxVel(const float vel);
+  void SetMaxAccel(const float accel);
+  void SetMaxDecel(const float decel);
+  void SetAngAccel(const float accel);
+  void SetAngVel(const float vel);
+  void SetObstacleMargin(const float margin);
+  void SetCarrotDist(const float dist);
+
  private:
 
   // Test 1D TOC motion in a straight line.
