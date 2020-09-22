@@ -68,6 +68,8 @@ class Navigation {
                          float* clearance,
                          Eigen::Vector2f* obstruction);
   void SetNavGoal(const Eigen::Vector2f& loc, float angle);
+  void SetOverride(const Eigen::Vector2f& loc, float angle);
+  void Resume();
   bool PlanStillValid();
   void Plan();
   Eigen::Vector2f GetCarrot();
@@ -127,6 +129,8 @@ class Navigation {
   void GetPathOptions(std::vector<PathOption>* options);
   // Draw the robot's outline for visualization.
   void DrawRobot();
+  // Publish a status message
+  void PublishNavStatus(const Eigen::Vector2f& carrot);
 
   // Current robot location.
   Eigen::Vector2f robot_loc_;
@@ -187,6 +191,9 @@ class Navigation {
   // reference frame.
   Eigen::Vector2f local_target_;
 
+  // Global frame, set by an override message
+  Eigen::Vector2f override_target_;
+
   // Message for status publishing
   actionlib_msgs::GoalStatus status_msg_;
 
@@ -195,6 +202,7 @@ class Navigation {
 
   // Whether to enable autonomous navigation or not.
   bool enabled_;
+  bool target_override_;
 };
 
 }  // namespace navigation

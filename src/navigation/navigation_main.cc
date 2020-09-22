@@ -134,6 +134,21 @@ void OdometryCallback(const nav_msgs::Odometry& msg) {
   navigation_->UpdateOdometry(msg);
 }
 
+void GoToCallbackPS(const geometry_msgs::PoseStamped& msg) {
+  const Vector2f loc(msg.pose.position.x, msg.pose.position.y);
+  const float angle =
+      2.0 * atan2(msg.pose.orientation.z, msg.pose.orientation.w);
+  printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), angle);
+  navigation_->SetNavGoal(loc, angle);
+}
+
+void GoToCallback(const amrl_msgs::Pose2Df& msg) {
+  const Vector2f loc(msg.x, msg.y);
+  printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), msg.theta);
+  navigation_->SetNavGoal(loc, msg.theta);
+  navigation_->Resume();
+}
+
 void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
   if (!isnan(msg.max_vel)) {
     navigation_->SetMaxVel(msg.max_vel);
@@ -158,20 +173,13 @@ void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
   }
 }
 
-void GoToCallbackPS(const geometry_msgs::PoseStamped& msg) {
-  const Vector2f loc(msg.pose.position.x, msg.pose.position.y);
-  const float angle =
-      2.0 * atan2(msg.pose.orientation.z, msg.pose.orientation.w);
-  printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), angle);
-  navigation_->SetNavGoal(loc, angle);
-}
-
-void GoToCallback(const amrl_msgs::Pose2Df& msg) {
+// Probably a hack, overrides the carrot with a target from elsewhere.
+// Primarily used to implement temporary navigation behaviors without
+// overriding the global plan.
+void OverrideCallback(const amrl_msgs::Pose2Df& msg) {
   const Vector2f loc(msg.x, msg.y);
-  printf("Goal: (%f,%f) %f\u00b0\n", loc.x(), loc.y(), msg.theta);
-  navigation_->SetNavGoal(loc, msg.theta);
+  navigation_->SetOverride(loc, msg.theta);
 }
-
 
 void SignalHandler(int) {
   if (!run_) {
@@ -223,6 +231,8 @@ int main(int argc, char** argv) {
       n.subscribe("halt_robot", 1, &HaltCallback);
   ros::Subscriber config_sub =
       n.subscribe("nav_config", 1, &ConfigCallback);
+  ros::Subscriber override_sub =
+      n.subscribe("/nav_override", 1, &OverrideCallback);
 
   RateLoop loop(1.0 / FLAGS_dt);
   while (run_ && ros::ok()) {

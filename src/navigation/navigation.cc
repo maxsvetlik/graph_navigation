@@ -34,6 +34,7 @@
 #include "amrl_msgs/ColoredLine2D.h"
 #include "amrl_msgs/ColoredPoint2D.h"
 #include "amrl_msgs/VisualizationMsg.h"
+#include "amrl_msgs/NavStatusMsg.h"
 #include "glog/logging.h"
 #include "nav_msgs/Odometry.h"
 #include "ros/ros.h"
@@ -59,6 +60,7 @@ using amrl_msgs::ColoredLine2D;
 using amrl_msgs::ColoredPoint2D;
 using amrl_msgs::Pose2Df;
 using amrl_msgs::VisualizationMsg;
+using amrl_msgs::NavStatusMsg;
 using geometry_msgs::Twist;
 using geometry_msgs::TwistStamped;
 using ros_helpers::DrawEigen2DLine;
@@ -119,6 +121,7 @@ ros::Publisher twist_drive_pub_;
 ros::Publisher viz_pub_;
 ros::Publisher status_pub_;
 ros::Publisher fp_pcl_pub_;
+ros::Publisher nav_status_pub_;
 VisualizationMsg local_viz_msg_;
 VisualizationMsg global_viz_msg_;
 AckermannCurvatureDriveMsg drive_msg_;
@@ -240,6 +243,15 @@ void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
   nav_goal_angle_ = angle;
   nav_complete_ = false;
   plan_path_.clear();
+}
+
+void Navigation::SetOverride(const Vector2f& loc, float angle) {
+  override_target_ = loc;
+  target_override_ = true;
+}
+
+void Navigation::Resume() {
+  target_override_ = false;
 }
 
 void Navigation::UpdateMap(const string& map_file) {
@@ -1109,6 +1121,22 @@ void Navigation::Abort() {
   nav_complete_ = true;
 }
 
+void Navigation::PublishNavStatus(const Vector2f& target) {
+  NavStatusMsg msg;
+  if (target_override_) {
+    msg.status = "Override";
+  } else {
+    msg.status = "Normal";
+  }
+  msg.nav_complete = nav_complete_;
+  msg.velocity.x = robot_vel_.x();
+  msg.velocity.y = robot_vel_.y();
+  msg.velocity.theta = robot_omega_;
+  msg.local_target.x = target.x();
+  msg.local_target.y = target.y();
+  nav_status_pub_.publish(msg);
+}
+
 void Navigation::SetMaxVel(const float vel) {
   FLAGS_max_speed = vel;
 }
@@ -1167,6 +1195,7 @@ void Navigation::Run() {
     status_msg_.status = 3;
     status_pub_.publish(status_msg_);
     viz_pub_.publish(local_viz_msg_);
+    PublishNavStatus(robot_loc_);
     return;
   }
   status_msg_.status = 1;
@@ -1176,6 +1205,7 @@ void Navigation::Run() {
   }
   // Get Carrot.
   const Vector2f carrot = GetCarrot();
+  PublishNavStatus(carrot);
   auto msg_copy = global_viz_msg_;
   visualization::DrawCross(carrot, 0.2, 0x10E000, msg_copy);
   visualization::DrawArc(
@@ -1197,6 +1227,10 @@ void Navigation::Run() {
     visualization::DrawCross(local_target_, 0.2, 0xFF0080, local_viz_msg_);
     // printf("Local target: %8.3f, %8.3f (%6.1f\u00b0)\n",
     //     local_target_.x(), local_target_.y(), RadToDeg(theta));
+    if (target_override_) {
+      local_target_ =
+          Rotation2Df(-robot_angle_) * (override_target_ - robot_loc_);
+    }
     if (fabs(theta) > kLocalFOV) {
       // printf("TurnInPlace\n");
       TurnInPlace();
