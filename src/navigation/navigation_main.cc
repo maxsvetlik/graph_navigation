@@ -150,25 +150,25 @@ void GoToCallback(const amrl_msgs::Pose2Df& msg) {
 }
 
 void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
-  if (!isnan(msg.max_vel)) {
+  if (msg.max_vel > -1) {
     navigation_->SetMaxVel(msg.max_vel);
   }
-  if (!isnan(msg.max_accel)) {
+  if (msg.max_accel > -1) {
     navigation_->SetMaxAccel(msg.max_accel);
   }
-  if (!isnan(msg.max_decel)) {
+  if (msg.max_decel > -1) {
     navigation_->SetMaxDecel(msg.max_decel);
   }
-  if (!isnan(msg.ang_accel)) {
+  if (msg.ang_accel > -1) {
     navigation_->SetAngAccel(msg.ang_accel);
   }
-  if (!isnan(msg.ang_vel)) {
+  if (msg.ang_vel > -1) {
     navigation_->SetAngVel(msg.ang_vel);
   }
-  if (!isnan(msg.margin)) {
+  if (msg.margin > -1) {
     navigation_->SetObstacleMargin(msg.margin);
   }
-  if (!isnan(msg.carrot_dist)) {
+  if (msg.carrot_dist > -1) {
     navigation_->SetCarrotDist(msg.carrot_dist);
   }
 }
@@ -232,7 +232,7 @@ int main(int argc, char** argv) {
   ros::Subscriber config_sub =
       n.subscribe("nav_config", 1, &ConfigCallback);
   ros::Subscriber override_sub =
-      n.subscribe("/nav_override", 1, &OverrideCallback);
+      n.subscribe("nav_override", 1, &OverrideCallback);
 
   RateLoop loop(1.0 / FLAGS_dt);
   while (run_ && ros::ok()) {

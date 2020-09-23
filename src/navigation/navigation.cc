@@ -22,6 +22,10 @@
 #include <algorithm>
 #include <cmath>
 #include <deque>
+#include "eigen3/Eigen/Dense"
+#include "eigen3/Eigen/Geometry"
+// #include <Eigen/src/Core/Matrix.h>
+// #include <eigen3/Eigen/src/Core/Matrix.h>
 #include <string>
 
 #include "geometry_msgs/Twist.h"
@@ -79,7 +83,7 @@ using namespace ros_helpers;
 // Control loop period, in seconds.
 DEFINE_double(dt, 0.025, "Control loop period");
 // Maximum speed that the robot will drive at.
-DEFINE_double(max_speed, 1.5, "Maximum speed");
+DEFINE_double(max_speed, 2.0, "Maximum speed");
 // Maximum acceleration of the robot.
 DEFINE_double(max_accel, 5.0, "Maximum acceleration");
 // Maximum deceleration of the robot.
@@ -198,6 +202,7 @@ Navigation::Navigation(const string& map_file, ros::NodeHandle* n) :
     robot_vel_(0, 0),
     robot_omega_(0),
     nav_complete_(true),
+    abort_(false),
     nav_goal_loc_(0, 0),
     nav_goal_angle_(0),
     odom_initialized_(false),
@@ -218,6 +223,7 @@ Navigation::Navigation(const string& map_file, ros::NodeHandle* n) :
   status_pub_ = n->advertise<GoalStatus>(
       "navigation_goal_status", 1);
   viz_pub_ = n->advertise<VisualizationMsg>("visualization", 1);
+  nav_status_pub_= n->advertise<NavStatusMsg>("nav_status", 1);
   fp_pcl_pub_ = n->advertise<PointCloud>("forward_predicted_pcl", 1);
   local_viz_msg_ = visualization::NewVisualizationMessage(
       "base_link", "navigation_local");
@@ -239,15 +245,19 @@ void Navigation::Enable(bool enable) {
 }
 
 void Navigation::SetNavGoal(const Vector2f& loc, float angle) {
+  target_override_ = false;
+  abort_ = false;
   nav_goal_loc_ = loc;
   nav_goal_angle_ = angle;
   nav_complete_ = false;
   plan_path_.clear();
+  // Resume();
 }
 
 void Navigation::SetOverride(const Vector2f& loc, float angle) {
   override_target_ = loc;
   target_override_ = true;
+  abort_ = false;
 }
 
 void Navigation::Resume() {
@@ -390,8 +400,8 @@ float Navigation::Run1DTOC(float x_now,
                            float dt) const {
   static FILE* fid = nullptr;
   // const bool test_mode = false;
-  const bool test_mode =
-      FLAGS_test_toc || FLAGS_test_obstacle || FLAGS_test_avoidance;
+  const bool test_mode = false;
+      // FLAGS_test_toc || FLAGS_test_obstacle || FLAGS_test_avoidance;
   if (test_mode && !FLAGS_test_log_file.empty() && fid == nullptr) {
     fid = fopen(FLAGS_test_log_file.c_str(), "w");
   }
@@ -533,7 +543,7 @@ void Navigation::Plan() {
   const uint64_t goal_id = planning_domain_.AddDynamicState(nav_goal_loc_);
   Domain::State start = planning_domain_.states[start_id];
   Domain::State goal = planning_domain_.states[goal_id];
-  if (true) {
+  if (false) {
     printf("Plan from (%7.2f,%7.2f) to (%7.2f,%7.2f)\n",
           start.loc.x(), start.loc.y(), goal.loc.x(), goal.loc.y());
     printf("Map:\n======\n");
@@ -961,6 +971,11 @@ void Navigation::RunObstacleAvoidance() {
   static const bool kDebug = false;
   float curvature_cmd = 0;
   float velocity_cmd = 0;
+  Vector2f local_target = local_target_;
+  if (target_override_) {
+    local_target =
+      Rotation2Df(-robot_angle_) * (override_target_ - robot_loc_);
+  }
 
   if (false) {
     fp_point_cloud_ = {
@@ -976,11 +991,11 @@ void Navigation::RunObstacleAvoidance() {
 
   for (PathOption& o : path_options) {
     if (fabs(o.curvature) < kEpsilon) {
-      o.free_path_length = min(kMaxFreeLength, local_target_.x());
+      o.free_path_length = min(kMaxFreeLength, local_target.x());
     } else {
       const float turn_radius = 1.0f / o.curvature;
       const Vector2f turn_center(0, turn_radius);
-      const Vector2f target_radial = local_target_ - turn_center;
+      const Vector2f target_radial = local_target - turn_center;
       const Vector2f middle_radial =
           fabs(turn_radius) * target_radial.normalized();
       const float middle_angle =
@@ -993,13 +1008,13 @@ void Navigation::RunObstacleAvoidance() {
     // o.free_path_length = 1;
     GetFreePathLength(
         o.curvature, &o.free_path_length, &o.clearance, &o.obstruction);
-    o.closest_point = GetClosestApproach(o, local_target_);
+    o.closest_point = GetClosestApproach(o, local_target);
     o.clearance_to_goal =
-        Clearance(Line2f(GetFinalPoint(o), local_target_), fp_point_cloud_);
+        Clearance(Line2f(GetFinalPoint(o), local_target), fp_point_cloud_);
     // visualization::DrawCross(GetFinalPoint(o), 0.1, 0x00C0C0, local_viz_msg_);
     // o.clearance_to_goal = max(0.0f, o.clearance_to_goal - w);
     if (o.clearance_to_goal > 0.0f) {
-      o.dist_to_goal = (o.closest_point - local_target_).norm();
+      o.dist_to_goal = (o.closest_point - local_target).norm();
     } else {
       o.dist_to_goal = FLT_MAX;
     }
@@ -1017,14 +1032,14 @@ void Navigation::RunObstacleAvoidance() {
                                   0x0000FF,
                                   local_viz_msg_);
   }
-  const PathOption best_option = GetBestOption(path_options, local_target_);
+  const PathOption best_option = GetBestOption(path_options, local_target);
   visualization::DrawPathOption(best_option.curvature,
                                 best_option.free_path_length,
                                 best_option.clearance,
                                 0xFF0000,
                                 local_viz_msg_);
 
-  const Vector2f closest_point = GetClosestApproach(best_option, local_target_);
+  const Vector2f closest_point = GetClosestApproach(best_option, local_target);
   visualization::DrawCross(closest_point, 0.05, 0x00A000, local_viz_msg_);
   curvature_cmd = best_option.curvature;
   const float dist_left =
@@ -1115,10 +1130,11 @@ void Navigation::LatencyTest() {
 }
 
 void Navigation::Abort() {
-  if (!nav_complete_) {
-    printf("Abort!\n");
-  }
-  nav_complete_ = true;
+  // if (!nav_complete_) {
+    // printf("Abort!\n");
+  // }
+  // nav_complete_ = true;
+  abort_ = true;
 }
 
 void Navigation::PublishNavStatus(const Vector2f& target) {
@@ -1162,6 +1178,8 @@ void Navigation::SetObstacleMargin(const float margin) {
 }
 
 void Navigation::SetCarrotDist(const float carrot_dist) {
+  cout << "SETTING CARROT DIST " << endl;
+  cout << carrot_dist << endl;
   FLAGS_carrot_dist = carrot_dist;
 }
 
@@ -1190,13 +1208,12 @@ void Navigation::Run() {
   }
 
   // Publish Navigation Status
-  if (nav_complete_) {
-    Halt();
-    status_msg_.status = 3;
-    status_pub_.publish(status_msg_);
-    viz_pub_.publish(local_viz_msg_);
-    PublishNavStatus(robot_loc_);
-    return;
+  if (nav_complete_ || abort_) {
+    // Halt();
+    // status_pub_.publish(status_msg_);
+    // viz_pub_.publish(local_viz_msg_);
+    // PublishNavStatus(robot_loc_);
+    // return;
   }
   status_msg_.status = 1;
   status_pub_.publish(status_msg_);
@@ -1212,9 +1229,12 @@ void Navigation::Run() {
       Vector2f(0, 0), FLAGS_carrot_dist, -M_PI, M_PI, 0xE0E0E0, local_viz_msg_);
   viz_pub_.publish(msg_copy);
   // Check if complete.
+  // if (!target_override_) {
   nav_complete_ = (robot_loc_ - carrot).norm() < kNavTolerance;
+  // }
   // Run local planner.
-  if (nav_complete_) {
+  if (nav_complete_ || abort_) {
+    status_msg_.status = 3;
     Halt();
   } else {
     // TODO check if the robot needs to turn around.
@@ -1227,10 +1247,6 @@ void Navigation::Run() {
     visualization::DrawCross(local_target_, 0.2, 0xFF0080, local_viz_msg_);
     // printf("Local target: %8.3f, %8.3f (%6.1f\u00b0)\n",
     //     local_target_.x(), local_target_.y(), RadToDeg(theta));
-    if (target_override_) {
-      local_target_ =
-          Rotation2Df(-robot_angle_) * (override_target_ - robot_loc_);
-    }
     if (fabs(theta) > kLocalFOV) {
       // printf("TurnInPlace\n");
       TurnInPlace();
