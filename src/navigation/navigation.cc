@@ -100,7 +100,7 @@ DEFINE_double(carrot_dist, 2.5, "Distance of carrot from current location");
 DEFINE_double(system_latency, 0.24, "System latency in seconds");
 
 // Margin to leave around the car for obstacle checking.
-DEFINE_double(obstacle_margin, 0.10, "Margin to leave for obstacle avoidance");
+DEFINE_double(obstacle_margin, 1.0, "Margin to leave for obstacle avoidance");
 
 // Special test modes.
 DEFINE_bool(test_toc, false, "Run 1D time-optimal controller test");
@@ -756,8 +756,10 @@ void Navigation::GetFreePathLength(float curvature,
 }
 
 DEFINE_double(dw, 1, "Distance weight");
-DEFINE_double(cw, -0.5, "Clearance weight");
-DEFINE_double(fw, -1, "Free path weight");
+DEFINE_double(cw, -1.0, "Clearance weight");
+DEFINE_double(fw, -1.25, "Free path weight");
+// DEFINE_double(cw, -0.5, "Clearance weight");
+// DEFINE_double(fw, -1.0, "Free path weight");
 DEFINE_double(subopt, 1.5, "Max path increase for clearance");
 
 PathOption GetBestOption(const vector<PathOption>& options,
@@ -1209,11 +1211,12 @@ void Navigation::Run() {
 
   // Publish Navigation Status
   if (nav_complete_ || abort_) {
-    // Halt();
+    Halt();
     // status_pub_.publish(status_msg_);
     // viz_pub_.publish(local_viz_msg_);
-    // PublishNavStatus(robot_loc_);
-    // return;
+    status_msg_.status = 3;
+    PublishNavStatus(robot_loc_);
+    return;
   }
   status_msg_.status = 1;
   status_pub_.publish(status_msg_);
