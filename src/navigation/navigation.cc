@@ -757,7 +757,7 @@ void Navigation::GetFreePathLength(float curvature,
 
 DEFINE_double(dw, 1, "Distance weight");
 DEFINE_double(cw, -1.0, "Clearance weight");
-DEFINE_double(fw, -1.25, "Free path weight");
+DEFINE_double(fw, -1.5, "Free path weight");
 // DEFINE_double(cw, -0.5, "Clearance weight");
 // DEFINE_double(fw, -1.0, "Free path weight");
 DEFINE_double(subopt, 1.5, "Max path increase for clearance");
