@@ -100,7 +100,7 @@ DEFINE_double(carrot_dist, 2.5, "Distance of carrot from current location");
 DEFINE_double(system_latency, 0.24, "System latency in seconds");
 
 // Margin to leave around the car for obstacle checking.
-DEFINE_double(obstacle_margin, 1.0, "Margin to leave for obstacle avoidance");
+DEFINE_double(obstacle_margin, 0.05, "Margin to leave for obstacle avoidance");
 
 // Special test modes.
 DEFINE_bool(test_toc, false, "Run 1D time-optimal controller test");
