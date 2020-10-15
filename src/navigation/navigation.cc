@@ -92,7 +92,7 @@ DEFINE_double(max_decel, 5.0, "Maximum deceleration");
 DEFINE_double(max_ang_accel, 0.5, "Maximum angular acceleration");
 DEFINE_double(max_ang_speed, 1.0, "Maximum angular speed");
 
-DEFINE_double(carrot_dist, 2.5, "Distance of carrot from current location");
+DEFINE_double(carrot_dist, 1.5, "Distance of carrot from current location");
 
 // Latency of the robot: time difference between making an observation, to
 // processing the sensor data, to planning, to sending commands to the
@@ -100,7 +100,7 @@ DEFINE_double(carrot_dist, 2.5, "Distance of carrot from current location");
 DEFINE_double(system_latency, 0.24, "System latency in seconds");
 
 // Margin to leave around the car for obstacle checking.
-DEFINE_double(obstacle_margin, 1.0, "Margin to leave for obstacle avoidance");
+DEFINE_double(obstacle_margin, 0.05, "Margin to leave for obstacle avoidance");
 
 // Special test modes.
 DEFINE_bool(test_toc, false, "Run 1D time-optimal controller test");
@@ -755,9 +755,9 @@ void Navigation::GetFreePathLength(float curvature,
   *clearance = max(0.0f, *clearance);
 }
 
-DEFINE_double(dw, 1, "Distance weight");
-DEFINE_double(cw, -1.0, "Clearance weight");
-DEFINE_double(fw, -1.5, "Free path weight");
+DEFINE_double(dw, 0.9, "Distance weight");
+DEFINE_double(cw, 1.0, "Clearance weight");
+DEFINE_double(fw, -1.0, "Free path weight");
 // DEFINE_double(cw, -0.5, "Clearance weight");
 // DEFINE_double(fw, -1.0, "Free path weight");
 DEFINE_double(subopt, 1.5, "Max path increase for clearance");
@@ -1143,6 +1143,8 @@ void Navigation::PublishNavStatus(const Vector2f& target) {
   NavStatusMsg msg;
   if (target_override_) {
     msg.status = "Override";
+  } else if (nav_complete_) {
+    msg.status = "Complete";
   } else {
     msg.status = "Normal";
   }
