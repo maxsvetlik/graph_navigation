@@ -171,6 +171,9 @@ void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
   if (msg.carrot_dist > -1) {
     navigation_->SetCarrotDist(msg.carrot_dist);
   }
+  if (!std::isnan(msg.clearance_weight)) {
+    navigation_->SetClearanceWeight(msg.clearance_weight);
+  }
 }
 
 // Probably a hack, overrides the carrot with a target from elsewhere.

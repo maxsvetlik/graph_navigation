@@ -88,6 +88,7 @@ class Navigation {
   void SetAngVel(const float vel);
   void SetObstacleMargin(const float margin);
   void SetCarrotDist(const float dist);
+  void SetClearanceWeight(const float weight);
 
  private:
 

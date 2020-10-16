@@ -92,7 +92,7 @@ DEFINE_double(max_decel, 5.0, "Maximum deceleration");
 DEFINE_double(max_ang_accel, 0.5, "Maximum angular acceleration");
 DEFINE_double(max_ang_speed, 1.0, "Maximum angular speed");
 
-DEFINE_double(carrot_dist, 1.5, "Distance of carrot from current location");
+DEFINE_double(carrot_dist, 2.0, "Distance of carrot from current location");
 
 // Latency of the robot: time difference between making an observation, to
 // processing the sensor data, to planning, to sending commands to the
@@ -1179,6 +1179,10 @@ void Navigation::SetAngVel(const float vel) {
 
 void Navigation::SetObstacleMargin(const float margin) {
   FLAGS_obstacle_margin = margin;
+}
+
+void Navigation::SetClearanceWeight(const float weight) {
+  FLAGS_cw = weight;
 }
 
 void Navigation::SetCarrotDist(const float carrot_dist) {
