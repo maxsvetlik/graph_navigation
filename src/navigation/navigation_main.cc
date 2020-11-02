@@ -30,6 +30,7 @@
 #include "amrl_msgs/Localization2DMsg.h"
 #include "amrl_msgs/Pose2Df.h"
 #include "amrl_msgs/NavigationConfigMsg.h"
+#include "cobot_msgs/CobotLocalizationMsg.h"
 #include "glog/logging.h"
 #include "gflags/gflags.h"
 #include "eigen3/Eigen/Dense"
@@ -162,9 +163,9 @@ void ConfigCallback(const amrl_msgs::NavigationConfigMsg& msg) {
   if (msg.ang_accel > -1) {
     navigation_->SetAngAccel(msg.ang_accel);
   }
-  if (msg.ang_vel > -1) {
-    navigation_->SetAngVel(msg.ang_vel);
-  }
+  // if (msg.ang_vel > -1) {
+    // navigation_->SetAngVel(msg.ang_vel);
+  // }
   if (msg.margin > -1) {
     navigation_->SetObstacleMargin(msg.margin);
   }
@@ -191,6 +192,10 @@ void SignalHandler(int) {
   }
   printf("Exiting.\n");
   run_ = false;
+}
+
+void CobotLocalizationCallback(const cobot_msgs::CobotLocalizationMsg& msg) {
+  navigation_->UpdateLocation(Vector2f(msg.x, msg.y), msg.angle);
 }
 
 void LocalizationCallback(const amrl_msgs::Localization2DMsg& msg) {
@@ -224,6 +229,8 @@ int main(int argc, char** argv) {
       n.subscribe(FLAGS_odom_topic, 1, &OdometryCallback);
   ros::Subscriber localization_sub =
       n.subscribe(FLAGS_loc_topic, 1, &LocalizationCallback);
+  ros::Subscriber cobot_localization_sub =
+      n.subscribe("/Cobot/Localization", 1, &CobotLocalizationCallback);
   ros::Subscriber laser_sub =
       n.subscribe(FLAGS_laser_topic, 1, &LaserCallback);
   ros::Subscriber goto_sub =

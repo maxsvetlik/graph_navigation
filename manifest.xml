@@ -18,6 +18,7 @@
   <depend package="rosbag"/>
   <depend package="tf"/>
   <depend package="amrl_msgs"/>
+  <depend package="cobot_msgs"/>
 
 </package>
 

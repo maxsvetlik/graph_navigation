@@ -39,6 +39,7 @@
 #include "amrl_msgs/ColoredPoint2D.h"
 #include "amrl_msgs/VisualizationMsg.h"
 #include "amrl_msgs/NavStatusMsg.h"
+#include "cobot_msgs/CobotDriveMsg.h"
 #include "glog/logging.h"
 #include "nav_msgs/Odometry.h"
 #include "ros/ros.h"
@@ -65,6 +66,7 @@ using amrl_msgs::ColoredPoint2D;
 using amrl_msgs::Pose2Df;
 using amrl_msgs::VisualizationMsg;
 using amrl_msgs::NavStatusMsg;
+using cobot_msgs::CobotDriveMsg;
 using geometry_msgs::Twist;
 using geometry_msgs::TwistStamped;
 using ros_helpers::DrawEigen2DLine;
@@ -122,6 +124,7 @@ DEFINE_bool(no_joystick, true, "Disregards autonomy enable mode from joystick");
 namespace {
 ros::Publisher ackermann_drive_pub_;
 ros::Publisher twist_drive_pub_;
+ros::Publisher cobot_pub_;
 ros::Publisher viz_pub_;
 ros::Publisher status_pub_;
 ros::Publisher fp_pcl_pub_;
@@ -218,6 +221,8 @@ Navigation::Navigation(const string& map_file, ros::NodeHandle* n) :
     enabled_(false) {
   ackermann_drive_pub_ = n->advertise<AckermannCurvatureDriveMsg>(
       "ackermann_curvature_drive", 1);
+  cobot_pub_ = n->advertise<CobotDriveMsg>(
+      "/Cobot/Drive", 1);
   twist_drive_pub_ = n->advertise<geometry_msgs::Twist>(
       FLAGS_twist_drive_topic, 1);
   status_pub_ = n->advertise<GoalStatus>(
@@ -275,6 +280,20 @@ void Navigation::UpdateLocation(const Eigen::Vector2f& loc, float angle) {
   loc_initialized_ = true;
 }
 
+CobotDriveMsg TwistToCobot(geometry_msgs::TwistStamped msg) {
+  CobotDriveMsg output;
+  output.velocity_x = msg.twist.linear.x;
+  output.velocity_y = msg.twist.linear.y;
+  output.velocity_r = msg.twist.angular.z;
+  output.transMaxAcceleration = FLAGS_max_accel;
+  output.transMaxDeceleration = FLAGS_max_decel;
+  output.transMaxVelocity = FLAGS_max_speed;
+  output.rotMaxAcceleration = FLAGS_max_ang_accel;
+  output.rotMaxDeceleration = FLAGS_max_ang_accel;
+  output.rotMaxVelocity = FLAGS_max_ang_speed;
+  return output;
+}
+
 void Navigation::SendCommand(float vel, float curvature) {
   drive_msg_.header.stamp = ros::Time::now();
   if (!FLAGS_no_joystick && !enabled_) {
@@ -286,6 +305,8 @@ void Navigation::SendCommand(float vel, float curvature) {
   ackermann_drive_pub_.publish(drive_msg_);
   auto twist = AckermannToTwist(drive_msg_);
   twist_drive_pub_.publish(twist.twist);
+  CobotDriveMsg cobot_msg = TwistToCobot(twist);
+  cobot_pub_.publish(cobot_msg);
   // This command is going to take effect system latency period after. Hence
   // modify the timestamp to reflect the time when it will take effect.
   twist.header.stamp += ros::Duration(FLAGS_system_latency);
@@ -416,6 +437,10 @@ float Navigation::Run1DTOC(float x_now,
   float cruise_stopping_dist =
       speed * dt +
       Sq(speed) / (2.0 * d_max);
+  cout << "Cruise Dist: " << cruise_stopping_dist << endl;
+  cout << "Accel Dist: " << accel_stopping_dist << endl;
+  cout << "Dist Left: " << dist_left << endl;
+  cout << "Speed: " << speed << " Max Speed: " << max_speed << endl;
   char phase = '?';
   if (dist_left >  0) {
     if (speed < max_speed && accel_stopping_dist < dist_left) {
@@ -455,6 +480,7 @@ float Navigation::Run1DTOC(float x_now,
       fflush(fid);
     }
   }
+  cout << "Phase: " << phase << endl;
   return velocity_cmd;
 }
 
@@ -1091,19 +1117,24 @@ void Navigation::TurnInPlace() {
       angular_cmd = robot_omega_ - Sign(robot_omega_) * dv;
     }
   } else {
-    // printf("Running TOC\n");
+    printf("Running TOC\n");
     const float s = Sign(goal_theta);
+    cout << "FLAGS_max_ang_speed" << FLAGS_max_ang_speed << endl;
     angular_cmd = s * Run1DTOC(0, s * goal_theta, s * robot_omega_,
         FLAGS_max_ang_speed, FLAGS_max_ang_accel, FLAGS_max_ang_accel,
         FLAGS_dt);
   }
   // TODO: Motion profiling for omega.
-  // printf("TurnInPlace: %8.3f %8.3f %8.3f\n",
-  //        RadToDeg(goal_theta),
-  //        RadToDeg(robot_omega_),
-  //        RadToDeg(angular_cmd));
+  printf("TurnInPlace: %8.3f %8.3f %8.3f\n",
+         RadToDeg(goal_theta),
+         RadToDeg(robot_omega_),
+         RadToDeg(angular_cmd));
   const float curvature = Sign(goal_theta) * 10000.0;
   const float velocity_cmd = angular_cmd / curvature;
+  printf("Curvature: %8.3f Command: %8.3f\n",
+         curvature,
+         velocity_cmd);
+
   SendCommand(velocity_cmd, curvature);
 }
 
@@ -1174,6 +1205,7 @@ void Navigation::SetAngAccel(const float accel) {
 }
 
 void Navigation::SetAngVel(const float vel) {
+  cout << "Set angle vel: " << endl;
   FLAGS_max_ang_speed = vel;
 }
 
@@ -1216,11 +1248,14 @@ void Navigation::Run() {
   }
 
   // Publish Navigation Status
+  if (nav_complete_) {
+    cout << "Nav Complete" << endl;
+  }
   if (nav_complete_ || abort_) {
     Halt();
-    // status_pub_.publish(status_msg_);
     // viz_pub_.publish(local_viz_msg_);
     status_msg_.status = 3;
+    status_pub_.publish(status_msg_);
     PublishNavStatus(robot_loc_);
     return;
   }
@@ -1257,10 +1292,10 @@ void Navigation::Run() {
     // printf("Local target: %8.3f, %8.3f (%6.1f\u00b0)\n",
     //     local_target_.x(), local_target_.y(), RadToDeg(theta));
     if (fabs(theta) > kLocalFOV) {
-      // printf("TurnInPlace\n");
+      printf("TurnInPlace\n");
       TurnInPlace();
     } else {
-      // printf("ObstAv\n");
+      printf("ObstAv\n");
       RunObstacleAvoidance();
     }
   }
